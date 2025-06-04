@@ -460,7 +460,7 @@ if st.session_state.writer.outline:
             progress_bar.progress(1.0)
             status_text.text("Artykuł gotowy!")
             
-            st.success("🎉 Artykuł został wygenerowany!")owanie sekcji
+            st.success("🎉 Artykuł został wygenerowany!")
             for i, section_title in enumerate(st.session_state.writer.outline):
                 status_text.text(f"Piszę sekcję: {section_title}")
                 
