@@ -166,34 +166,27 @@ Napisz cały artykuł bez żadnych dodatkowych komentarzy."""
 # Inicjalizacja aplikacji
 if 'writer' not in st.session_state:
     st.session_state.writer = ArticleWriter()
+    # Automatyczne ustawienie klucza API z secrets
+    if hasattr(st, 'secrets') and "ANTHROPIC_API_KEY" in st.secrets:
+        st.session_state.writer.set_api_key(st.secrets["ANTHROPIC_API_KEY"])
 
 if 'generated_article' not in st.session_state:
     st.session_state.generated_article = ""
+
+# Sprawdzenie dostępności klucza API
+anthropic_key = st.secrets.get("ANTHROPIC_API_KEY", "") if hasattr(st, 'secrets') else ""
 
 # Interfejs użytkownika
 st.title("📝 Agent do Pisania Artykułów Sponsorowanych")
 st.markdown("---")
 
-# Sekcja konfiguracji API
+# Informacja o statusie API w sidebarze
 with st.sidebar:
-    st.header("🔧 Konfiguracja API")
-    
-    # Sprawdzenie czy klucze są w secrets (Streamlit Cloud)
-    anthropic_key_default = st.secrets.get("ANTHROPIC_API_KEY", "") if hasattr(st, 'secrets') else ""
-    
-    anthropic_key = st.text_input(
-        "Klucz API Anthropic (Claude)",
-        type="password",
-        value=anthropic_key_default,
-        help="Wymagany do generowania treści"
-    )
-    
-    if anthropic_key_default:
-        st.success("🔑 Klucz Anthropic załadowany z secrets")
-    
-    if st.button("💾 Zapisz konfigurację"):
-        st.session_state.writer.set_api_key(anthropic_key)
-        st.success("Konfiguracja zapisana!")
+    st.header("📊 Status")
+    if anthropic_key:
+        st.success("✅ API Claude aktywne")
+    else:
+        st.error("❌ Brak klucza API w secrets")
 
 # Główny interfejs
 col1, col2 = st.columns([1, 1])
