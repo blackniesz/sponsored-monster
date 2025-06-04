@@ -501,81 +501,36 @@ if st.session_state.writer.article_content:
     if char_count > 7000:
         st.warning(f"⚠️ Artykuł ma {char_count} znaków - to za dużo! Docelowo 5000-7000 znaków.")
     
-    # Wybór trybu edycji
-    edit_mode = st.radio(
-        "Wybierz tryb edycji:",
-        ["📝 Edytor wizualny", "💻 Edytor Markdown"],
-        horizontal=True
+    # Prosty edytor
+    st.subheader("✏️ Edytuj artykuł:")
+    edited_article = st.text_area(
+        "Edytuj treść artykułu:",
+        value=st.session_state.writer.article_content,
+        height=500,
+        help="Edytuj artykuł w formacie Markdown",
+        label_visibility="collapsed"
     )
     
-    if edit_mode == "📝 Edytor wizualny":
-        # Edytowalny podgląd HTML
-        st.subheader("✏️ Edytuj artykuł (tryb wizualny):")
-        
-        # Konwersja markdown na edytowalne pola
-        lines = st.session_state.writer.article_content.split('\n')
-        edited_lines = []
-        
-        i = 0
-        while i < len(lines):
-            line = lines[i].strip()
-            
-            if line.startswith('# '):
-                # Tytuł główny
-                title = st.text_input("🏷️ Tytuł artykułu:", value=line[2:], key=f"title_{i}")
-                edited_lines.append(f"# {title}")
-                
-            elif line.startswith('## '):
-                # Śródtytuł
-                subtitle = st.text_input(f"📋 Śródtytuł {len([l for l in edited_lines if l.startswith('## ')])+ 1}:", value=line[3:], key=f"subtitle_{i}")
-                edited_lines.append(f"## {subtitle}")
-                
-            elif line and not line.startswith('#'):
-                # Paragraf
-                if line:
-                    paragraph = st.text_area(f"📝 Akapit:", value=line, height=100, key=f"paragraph_{i}")
-                    edited_lines.append(paragraph)
-                else:
-                    edited_lines.append("")
-            else:
-                edited_lines.append(line)
-            
-            i += 1
-        
-        # Złożenie artykułu
-        edited_article = '\n\n'.join([line for line in edited_lines if line.strip()])
-        
-        # Podgląd
-        st.subheader("👁️ Podgląd:")
-        st.markdown(edited_article)
-        
-    else:
-        # Tradycyjny edytor Markdown
-        col1, col2 = st.columns([1, 1])
-        
-        with col1:
-            st.subheader("📝 Kod Markdown:")
-            edited_article = st.text_area(
-                "Edytuj artykuł (Markdown):",
-                value=st.session_state.writer.article_content,
-                height=500,
-                help="Możesz edytować artykuł w formacie Markdown"
-            )
-        
-        with col2:
-            st.subheader("👁️ Podgląd:")
-            st.markdown(edited_article)
+    # Podgląd na żywo
+    if edited_article != st.session_state.writer.article_content:
+        st.session_state.writer.article_content = edited_article
     
-    # Aktualizacja session state
-    st.session_state.writer.article_content = edited_article
+    st.subheader("👁️ Podgląd artykułu:")
+    st.markdown(edited_article)
     
     # Przycisk do pobrania
-    st.download_button(
-        label="📥 Pobierz artykuł (.md)",
-        data=edited_article,
-        file_name=f"artykul_{topic.replace(' ', '_').replace('/', '_')}.md",
-        mime="text/markdown"
-    )
+    col1, col2 = st.columns([1, 4])
+    with col1:
+        st.download_button(
+            label="📥 Pobierz (.md)",
+            data=edited_article,
+            file_name=f"artykul_{topic.replace(' ', '_').replace('/', '_')}.md",
+            mime="text/markdown"
+        )
+    with col2:
+        if st.button("🗑️ Usuń artykuł i zacznij od nowa"):
+            st.session_state.writer.article_content = ""
+            st.rerun()
 
 # Stopka
 st.markdown("---")
