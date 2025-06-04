@@ -35,50 +35,68 @@ CLINICS = {
 class ArticleWriter:
     def __init__(self):
         self.anthropic_api_key = None
-        self.google_api_key = None
-        self.google_cse_id = None
+        self.perplexity_api_key = None
         self.research_data = []
         self.outline = []
         self.article_content = ""
         
-    def set_api_keys(self, anthropic_key: str, google_key: str = None, cse_id: str = None):
+    def set_api_keys(self, anthropic_key: str, perplexity_key: str = None):
         self.anthropic_api_key = anthropic_key
-        self.google_api_key = google_key
-        self.google_cse_id = cse_id
+        self.perplexity_api_key = perplexity_key
     
-    def google_search(self, query: str, num_results: int = 5) -> List[Dict]:
-        """Wykonuje wyszukiwanie Google i zwraca wyniki"""
-        if not self.google_api_key or not self.google_cse_id:
-            return []
+    def perplexity_research(self, query: str) -> Dict:
+        """Wykonuje prosty research za pomocą Perplexity API"""
+        if not self.perplexity_api_key:
+            return {"content": "", "sources": []}
         
         try:
-            url = "https://www.googleapis.com/customsearch/v1"
-            params = {
-                'key': self.google_api_key,
-                'cx': self.google_cse_id,
-                'q': query,
-                'num': num_results,
-                'gl': 'pl',
-                'hl': 'pl'
+            url = "https://api.perplexity.ai/chat/completions"
+            
+            payload = {
+                "model": "sonar",
+                "messages": [
+                    {
+                        "role": "user", 
+                        "content": f"""Znajdź podstawowe, praktyczne informacje na temat: "{query}"
+
+Skup się na:
+- Ogólnych faktach i definicjach
+- Prostych wskazówkach i poradach
+- Popularnych informacjach (nie naukowych)
+- Praktycznych zastosowaniach
+- Ciekawostkach i podstawowych statystykach
+
+Odpowiedz zwięźle w języku polskim, w prostym, przystępnym stylu."""
+                    }
+                ],
+                "max_tokens": 400,
+                "temperature": 0.3
             }
             
-            response = requests.get(url, params=params)
+            headers = {
+                "Authorization": f"Bearer {self.perplexity_api_key}",
+                "Content-Type": "application/json"
+            }
+            
+            response = requests.post(url, json=payload, headers=headers)
             response.raise_for_status()
             
-            results = response.json()
-            search_results = []
+            result = response.json()
             
-            for item in results.get('items', []):
-                search_results.append({
-                    'title': item.get('title', ''),
-                    'snippet': item.get('snippet', ''),
-                    'link': item.get('link', '')
-                })
-            
-            return search_results
+            if 'choices' in result and len(result['choices']) > 0:
+                content = result['choices'][0]['message']['content']
+                
+                return {
+                    "content": content,
+                    "sources": [],
+                    "raw_response": result
+                }
+            else:
+                return {"content": "", "sources": []}
+                
         except Exception as e:
-            st.error(f"Błąd podczas wyszukiwania Google: {str(e)}")
-            return []
+            st.error(f"Błąd podczas researchu Perplexity: {str(e)}")
+            return {"content": "", "sources": []}
     
     def call_claude_api(self, messages: List[Dict], max_tokens: int = 2000) -> str:
         """Wywołuje API Claude Sonnet 4"""
@@ -115,50 +133,66 @@ class ArticleWriter:
         except Exception as e:
             return f"Błąd API: {str(e)}"
     
-    def conduct_research(self, topic: str, clinic: str) -> List[Dict]:
-        """Przeprowadza research na dany temat"""
-        # Przygotowanie zapytań wyszukiwania
-        search_queries = [
-            f"{topic} badania naukowe",
-            f"{topic} statystyki Polska",
-            f"{topic} eksperci opinie",
-            f"{topic} najnowsze informacje 2024 2025"
+    def conduct_research(self, topic: str, clinic: str) -> Dict:
+        """Przeprowadza prosty research na dany temat"""
+        
+        # Przygotowanie prostych zapytań
+        research_queries = [
+            f"{topic} co to jest podstawy",
+            f"{topic} praktyczne porady",
+            f"{topic} ciekawostki fakty"
         ]
         
-        all_results = []
+        all_research = {
+            "content": "",
+            "sources": [],
+            "summaries": []
+        }
         
-        # Wyszukiwanie Google (jeśli dostępne)
-        if self.google_api_key and self.google_cse_id:
-            for query in search_queries:
-                results = self.google_search(query, 3)
-                all_results.extend(results)
+        # Research za pomocą Perplexity
+        if self.perplexity_api_key:
+            st.info("🔍 Zbieranie podstawowych informacji...")
+            
+            for i, query in enumerate(research_queries, 1):
+                st.write(f"Szukam: {query}")
+                
+                research_result = self.perplexity_research(query)
+                
+                if research_result["content"]:
+                    all_research["content"] += f"\n\n**{query}:**\n"
+                    all_research["content"] += research_result["content"]
+                    
+                    # Krótkie podsumowanie dla wyświetlenia
+                    summary = research_result["content"][:150] + "..."
+                    all_research["summaries"].append({
+                        "query": query,
+                        "summary": summary
+                    })
+                
+                # Krótka pauza między zapytaniami
+                time.sleep(0.5)
+        else:
+            st.warning("⚠️ Brak klucza Perplexity API - research będzie ograniczony")
+            # Fallback do podstawowego researchu
+            all_research = {
+                "content": f"Podstawowe informacje o temacie: {topic}",
+                "sources": [],
+                "summaries": [{"query": topic, "summary": "Research niedostępny bez klucza API"}]
+            }
         
-        # Filtrowanie i organizowanie wyników
-        unique_results = []
-        seen_urls = set()
-        
-        for result in all_results:
-            if result['link'] not in seen_urls:
-                unique_results.append(result)
-                seen_urls.add(result['link'])
-        
-        # Ograniczenie do 10 najlepszych wyników
-        self.research_data = unique_results[:10]
-        return self.research_data
+        self.research_data = all_research
+        return all_research
     
-    def create_outline(self, topic: str, clinic: str, research_data: List[Dict]) -> List[str]:
+    def create_outline(self, topic: str, clinic: str, research_data: Dict) -> List[str]:
         """Tworzy konspekt artykułu"""
         clinic_info = CLINICS.get(clinic, {})
         
-        # Przygotowanie kontekstu dla Claude
-        research_context = "\n".join([
-            f"- {item['title']}: {item['snippet']}"
-            for item in research_data[:5]  # Top 5 wyników
-        ])
+        # Przygotowanie kontekstu z researchu Perplexity
+        research_context = research_data.get("content", "")[:1500]  # Pierwsze 1500 znaków
         
         prompt = f"""Stwórz zwięzły konspekt artykułu na temat: "{topic}"
 
-Kontekst z badań:
+Kontekst z zaawansowanego researchu:
 {research_context}
 
 WAŻNE: Artykuł ma być krótki - maksymalnie 800 słów, więc konspekt musi być zwięzły!
@@ -223,11 +257,10 @@ Napisz tylko wstęp, bez żadnych dodatkowych komentarzy."""
         """Pisze pojedynczą sekcję artykułu"""
         clinic_info = CLINICS.get(clinic, {})
         
-        # Kontekst z researchu
-        research_context = "\n".join([
-            f"- {item['snippet']}"
-            for item in self.research_data[:3]
-        ])
+        # Kontekst z researchu Perplexity
+        research_context = ""
+        if isinstance(self.research_data, dict):
+            research_context = self.research_data.get("content", "")[:800]  # Pierwsze 800 znaków
         
         # Informacje o tym, co już napisano i co będzie
         context_info = f"""
@@ -251,13 +284,14 @@ Pozostałe do napisania:
             clinic_instruction = f"""
 WAŻNE: W tej sekcji umieść subtelną wzmiankę o {clinic_info.get('nazwa', clinic)} - {clinic_info.get('opis', '')}. 
 Wzmianka powinna być naturalna i pasować do kontekstu, np. jako przykład dobrej praktyki czy miejsca, gdzie można uzyskać profesjonalną pomoc.
+Specjalizacje kliniki: {', '.join(clinic_info.get('specjalizacje', []))}
 """
 
         prompt = f"""Napisz treść sekcji "{section_title}" dla artykułu o tematyce: {topic}
 
 {context_info}
 
-Informacje z researchu:
+Zaawansowane informacje z researchu:
 {research_context}
 
 {clinic_instruction}
@@ -296,8 +330,7 @@ with st.sidebar:
     
     # Sprawdzenie czy klucze są w secrets (Streamlit Cloud)
     anthropic_key_default = st.secrets.get("ANTHROPIC_API_KEY", "") if hasattr(st, 'secrets') else ""
-    google_key_default = st.secrets.get("GOOGLE_API_KEY", "") if hasattr(st, 'secrets') else ""
-    google_cse_default = st.secrets.get("GOOGLE_CSE_ID", "") if hasattr(st, 'secrets') else ""
+    perplexity_key_default = st.secrets.get("PERPLEXITY_API_KEY", "") if hasattr(st, 'secrets') else ""
     
     anthropic_key = st.text_input(
         "Klucz API Anthropic (Claude)",
@@ -309,25 +342,23 @@ with st.sidebar:
     if anthropic_key_default:
         st.success("🔑 Klucz Anthropic załadowany z secrets")
     
-    st.subheader("Google Search API (opcjonalne)")
-    google_key = st.text_input(
-        "Klucz API Google",
+    st.subheader("🧠 Perplexity AI Research")
+    perplexity_key = st.text_input(
+        "Klucz API Perplexity",
         type="password",
-        value=google_key_default,
-        help="Dla lepszego researchu"
+        value=perplexity_key_default,
+        help="Do prostego researchu faktów i informacji"
     )
     
-    google_cse = st.text_input(
-        "Custom Search Engine ID",
-        value=google_cse_default,
-        help="ID wyszukiwarki Google"
-    )
-    
-    if google_key_default and google_cse_default:
-        st.success("🔍 Google Search API załadowany z secrets")
+    if perplexity_key_default:
+        st.success("🔍 Perplexity API załadowany z secrets")
+    elif perplexity_key:
+        st.info("💡 Perplexity zbierze podstawowe fakty o temacie")
+    else:
+        st.warning("⚠️ Bez Perplexity artykuły będą mniej merytoryczne")
     
     if st.button("💾 Zapisz konfigurację"):
-        st.session_state.writer.set_api_keys(anthropic_key, google_key, google_cse)
+        st.session_state.writer.set_api_keys(anthropic_key, perplexity_key)
         st.success("Konfiguracja zapisana!")
 
 # Główny interfejs
@@ -360,16 +391,19 @@ with col2:
     # Przycisk researchu
     if st.button("🔎 Przeprowadź research", disabled=not topic):
         if topic:
-            with st.spinner("Przeprowadzam research..."):
+            with st.spinner("Zbieranie podstawowych informacji..."):
                 research_results = st.session_state.writer.conduct_research(topic, clinic)
-                st.success(f"Znaleziono {len(research_results)} źródeł!")
                 
-                # Wyświetlenie wyników researchu
-                if research_results:
-                    st.subheader("Znalezione źródła:")
-                    for i, result in enumerate(research_results[:5], 1):
-                        st.write(f"{i}. **{result['title']}**")
-                        st.write(f"   {result['snippet'][:100]}...")
+                if research_results.get("content"):
+                    st.success("✅ Informacje zebrane!")
+                    
+                    # Wyświetlenie prostego podsumowania
+                    st.subheader("📄 Zebrane informacje:")
+                    for summary in research_results.get("summaries", []):
+                        with st.expander(f"💡 {summary['query']}"):
+                            st.write(summary['summary'])
+                else:
+                    st.warning("⚠️ Nie udało się zebrać informacji. Sprawdź klucz API Perplexity.")
     
     # Przycisk generowania konspektu
     if st.button("📝 Stwórz konspekt", disabled=not topic or not anthropic_key):
@@ -381,7 +415,7 @@ with col2:
                 st.success("Konspekt utworzony!")
                 
                 # Wyświetlenie konspektu
-                st.subheader("Konspekt artykułu:")
+                st.subheader("📋 Konspekt artykułu:")
                 for i, point in enumerate(outline, 1):
                     st.write(f"{i}. {point}")
 
@@ -407,6 +441,20 @@ if st.session_state.writer.outline:
             progress_bar.progress(1 / total_steps)
             
             # Generowanie sekcji
+            for i, section_title in enumerate(st.session_state.writer.outline):
+                status_text.text(f"Piszę sekcję: {section_title}")
+                
+                section_content = st.session_state.writer.write_section(
+                    section_title, topic, clinic, 
+                    st.session_state.writer.outline,
+                    full_article, i
+                )
+                
+                full_article += f"## {section_title}\n\n{section_content}\n\n"
+                progress_bar.progress((i + 2) / total_steps)
+                
+                # Krótka pauza między sekcjami
+                time.sleep(1)owanie sekcji
             for i, section_title in enumerate(st.session_state.writer.outline):
                 status_text.text(f"Piszę sekcję: {section_title}")
                 
