@@ -191,12 +191,6 @@ Odpowiedz zwięźle w języku polskim, w prostym, przystępnym stylu."""
         research_context = research_data.get("content", "")[:1500]  # Pierwsze 1500 znaków
         
         prompt = f"""Stwórz zwięzły konspekt artykułu na temat: "{topic}"
-        WAŻNE: Artykuł jest dla klinik MEDYCYNY ESTETYCZNEJ, więc:
-        - Skup się na zabiegach estetycznych i dermatologicznych
-        - Wspominaj o profesjonalnych rozwiązaniach medycznych
-        - Unikaj tematów czysto "naturalnych" czy DIY
-        - Konspekt powinien prowadzić do wniosku, że warto skorzystać z profesjonalnej pomocy
-        - Temat: "{topic}" - interpretuj go w kontekście medycyny estetycznej
 
 Kontekst z zaawansowanego researchu:
 {research_context}
@@ -316,10 +310,6 @@ Wymagania stylistyczne:
 6. Nie powtarzaj informacji już zawartych w poprzednich sekcjach
 7. Napisz w naturalny, ludzki sposób
 8. Bez dodatkowych komentarzy - tylko treść sekcji
-
-KONTEKST: Piszemy o klinice medycyny estetycznej. Artykuł powinien:
-- Pokazywać wartość profesjonalnych zabiegów
-- Sugerować, kiedy warto skonsultować się ze specjalistą
 
 Pamiętaj: to ma być część większego artykułu, więc płynnie nawiązuj do wcześniejszych treści."""
 
@@ -463,14 +453,8 @@ if st.session_state.writer.outline:
                 full_article += f"## {section_title}\n\n{section_content}\n\n"
                 progress_bar.progress((i + 2) / total_steps)
                 
-                # Krótka pauza między sekcjami
-                time.sleep(1)
-            
-            st.session_state.writer.article_content = full_article
-            progress_bar.progress(1.0)
-            status_text.text("Artykuł gotowy!")
-            
-            st.success("🎉 Artykuł został wygenerowany!")
+                # Krótka pauza między sekcjami  
+                time.sleep(0.5)owanie sekcji
             for i, section_title in enumerate(st.session_state.writer.outline):
                 status_text.text(f"Piszę sekcję: {section_title}")
                 
@@ -517,30 +501,79 @@ if st.session_state.writer.article_content:
     if char_count > 7000:
         st.warning(f"⚠️ Artykuł ma {char_count} znaków - to za dużo! Docelowo 5000-7000 znaków.")
     
-    # Edytor markdown
-    edited_article = st.text_area(
-        "Edytuj artykuł (Markdown):",
-        value=st.session_state.writer.article_content,
-        height=400,
-        help="Możesz edytować artykuł w formacie Markdown"
+    # Wybór trybu edycji
+    edit_mode = st.radio(
+        "Wybierz tryb edycji:",
+        ["📝 Edytor wizualny", "💻 Edytor Markdown"],
+        horizontal=True
     )
     
-    # Lepszy podgląd artykułu w dwóch kolumnach
-    col1, col2 = st.columns([1, 1])
-    
-    with col1:
-        st.subheader("📝 Kod Markdown:")
-        st.code(edited_article, language="markdown")
-    
-    with col2:
+    if edit_mode == "📝 Edytor wizualny":
+        # Edytowalny podgląd HTML
+        st.subheader("✏️ Edytuj artykuł (tryb wizualny):")
+        
+        # Konwersja markdown na edytowalne pola
+        lines = st.session_state.writer.article_content.split('\n')
+        edited_lines = []
+        
+        i = 0
+        while i < len(lines):
+            line = lines[i].strip()
+            
+            if line.startswith('# '):
+                # Tytuł główny
+                title = st.text_input("🏷️ Tytuł artykułu:", value=line[2:], key=f"title_{i}")
+                edited_lines.append(f"# {title}")
+                
+            elif line.startswith('## '):
+                # Śródtytuł
+                subtitle = st.text_input(f"📋 Śródtytuł {len([l for l in edited_lines if l.startswith('## ')])+ 1}:", value=line[3:], key=f"subtitle_{i}")
+                edited_lines.append(f"## {subtitle}")
+                
+            elif line and not line.startswith('#'):
+                # Paragraf
+                if line:
+                    paragraph = st.text_area(f"📝 Akapit:", value=line, height=100, key=f"paragraph_{i}")
+                    edited_lines.append(paragraph)
+                else:
+                    edited_lines.append("")
+            else:
+                edited_lines.append(line)
+            
+            i += 1
+        
+        # Złożenie artykułu
+        edited_article = '\n\n'.join([line for line in edited_lines if line.strip()])
+        
+        # Podgląd
         st.subheader("👁️ Podgląd:")
         st.markdown(edited_article)
+        
+    else:
+        # Tradycyjny edytor Markdown
+        col1, col2 = st.columns([1, 1])
+        
+        with col1:
+            st.subheader("📝 Kod Markdown:")
+            edited_article = st.text_area(
+                "Edytuj artykuł (Markdown):",
+                value=st.session_state.writer.article_content,
+                height=500,
+                help="Możesz edytować artykuł w formacie Markdown"
+            )
+        
+        with col2:
+            st.subheader("👁️ Podgląd:")
+            st.markdown(edited_article)
+    
+    # Aktualizacja session state
+    st.session_state.writer.article_content = edited_article
     
     # Przycisk do pobrania
     st.download_button(
         label="📥 Pobierz artykuł (.md)",
         data=edited_article,
-        file_name=f"artykul_{topic.replace(' ', '_')}.md",
+        file_name=f"artykul_{topic.replace(' ', '_').replace('/', '_')}.md",
         mime="text/markdown"
     )
 
