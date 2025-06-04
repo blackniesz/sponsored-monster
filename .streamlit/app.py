@@ -191,6 +191,12 @@ Odpowiedz zwięźle w języku polskim, w prostym, przystępnym stylu."""
         research_context = research_data.get("content", "")[:1500]  # Pierwsze 1500 znaków
         
         prompt = f"""Stwórz zwięzły konspekt artykułu na temat: "{topic}"
+        WAŻNE: Artykuł jest dla klinik MEDYCYNY ESTETYCZNEJ, więc:
+        - Skup się na zabiegach estetycznych i dermatologicznych
+        - Wspominaj o profesjonalnych rozwiązaniach medycznych
+        - Unikaj tematów czysto "naturalnych" czy DIY
+        - Konspekt powinien prowadzić do wniosku, że warto skorzystać z profesjonalnej pomocy
+        - Temat: "{topic}" - interpretuj go w kontekście medycyny estetycznej
 
 Kontekst z zaawansowanego researchu:
 {research_context}
@@ -310,6 +316,10 @@ Wymagania stylistyczne:
 6. Nie powtarzaj informacji już zawartych w poprzednich sekcjach
 7. Napisz w naturalny, ludzki sposób
 8. Bez dodatkowych komentarzy - tylko treść sekcji
+
+KONTEKST: Piszemy o klinice medycyny estetycznej. Artykuł powinien:
+- Pokazywać wartość profesjonalnych zabiegów
+- Sugerować, kiedy warto skonsultować się ze specjalistą
 
 Pamiętaj: to ma być część większego artykułu, więc płynnie nawiązuj do wcześniejszych treści."""
 
