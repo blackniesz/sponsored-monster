@@ -17,18 +17,18 @@ st.set_page_config(
 CLINICS = {
     "Klinika Hospittal": {
         "nazwa": "Klinika Hospittal",
-        "opis": "renomowana klinika medyczna oferująca kompleksową opiekę zdrowotną",
-        "specjalizacje": ["chirurgia plastyczna", "medycyna estetyczna", "dermatologia"]
+        "opis": "innowacyjny szpital chirurgii plastycznej łączący najwyższe standardy medyczne z dbałością o naturalne efekty",
+        "specjalizacje": ["chirurgia plastyczna", "chirurgia rekonstrukcyjna", "medycyna estetyczna", "zabiegi estetyczne"]
     },
     "Centrum Medyczne Gunarys": {
         "nazwa": "Centrum Medyczne Gunarys",
-        "opis": "nowoczesne centrum medyczne z szerokim spektrum usług diagnostycznych i terapeutycznych",
-        "specjalizacje": ["diagnostyka", "kardiologia", "ginekologia"]
+        "opis": "nowoczesna klinika oferująca kompleksową opiekę medyczną z indywidualnym podejściem do każdego pacjenta",
+        "specjalizacje": ["chirurgia estetyczna", "ginekologia", "laseroterapia", "medycyna estetyczna", "blefaroplastyka", "profilaktyka zdrowotna"]
     },
     "Klinika Ambroziak": {
         "nazwa": "Klinika Ambroziak",
-        "opis": "ekskluzywna klinika specjalizująca się w medycynie estetycznej i anti-aging",
-        "specjalizacje": ["medycyna estetyczna", "anti-aging", "kosmetologia"]
+        "opis": "klinika z ponad 20-letnim doświadczeniem wyznaczająca trendy dermatologii klinicznej i estetycznej w Polsce",
+        "specjalizacje": ["dermatologia kliniczna", "dermatologia estetyczna", "medycyna estetyczna", "kosmetologia", "autorskie kosmetyki Dr Ambroziak Laboratorium"]
     }
 }
 
@@ -156,28 +156,30 @@ class ArticleWriter:
             for item in research_data[:5]  # Top 5 wyników
         ])
         
-        prompt = f"""Stwórz szczegółowy konspekt artykułu na temat: "{topic}"
+        prompt = f"""Stwórz zwięzły konspekt artykułu na temat: "{topic}"
 
 Kontekst z badań:
 {research_context}
 
+WAŻNE: Artykuł ma być krótki - maksymalnie 800 słów, więc konspekt musi być zwięzły!
+
 Wymagania:
 1. Artykuł ma być merytoryczny, ale przystępny i lifestyleowy
 2. Musi zawierać subtelną wzmiankę o klinice: {clinic_info.get('nazwa', clinic)}
-3. Konspekt powinien składać się z 5-7 głównych punktów (śródtytułów)
+3. Konspekt powinien składać się z 4-5 głównych punktów (śródtytułów) - NIE WIĘCEJ!
 4. Każdy punkt powinien być konkretny i interesujący
 5. Nie używaj słów "kluczowy", "innowacyjny", "nowoczesny"
-6. Struktura: Wstęp z hookiem + 5-7 śródtytułów + naturalne zakończenie
+6. Struktura: Krótki wstęp z hookiem + 4-5 śródtytułów + naturalne zakończenie
 
 Zwróć tylko listę śródtytułów w formacie:
 1. Tytuł pierwszego punktu
 2. Tytuł drugiego punktu
 etc.
 
-Pamiętaj - to ma być artykuł lifestyleowy, nie medyczny podręcznik."""
+Pamiętaj - to ma być artykuł lifestyleowy, nie medyczny podręcznik. Krótki i na temat!"""
 
         messages = [{"role": "user", "content": prompt}]
-        response = self.call_claude_api(messages, 1000)
+        response = self.call_claude_api(messages, 800)
         
         # Parsowanie odpowiedzi na listę śródtytułów
         outline_lines = [line.strip() for line in response.split('\n') if line.strip()]
@@ -189,8 +191,9 @@ Pamiętaj - to ma być artykuł lifestyleowy, nie medyczny podręcznik."""
             if clean_line and len(clean_line) > 10:  # Filtrowanie zbyt krótkich linii
                 outline.append(clean_line)
         
-        self.outline = outline
-        return outline
+        # Ograniczenie do maksymalnie 5 punktów
+        self.outline = outline[:5]
+        return self.outline
     
     def write_introduction(self, topic: str, clinic: str, outline: List[str]) -> str:
         """Pisze wstęp z hookiem"""
@@ -202,7 +205,7 @@ Konspekt artykułu:
 {chr(10).join([f"- {point}" for point in outline])}
 
 Wymagania:
-1. 3-4 zdania maksymalnie
+1. MAKSYMALNIE 2-3 zdania (około 50-80 słów)
 2. Zaczynamy od ciekawego hooka - faktu, pytania retorycznego lub zaskakującej informacji
 3. Naturalny, lifestyleowy ton
 4. Bez zwracania się bezpośrednio do czytelnika (bez "Ci", "Twój", "Ciebie")
@@ -212,7 +215,7 @@ Wymagania:
 Napisz tylko wstęp, bez żadnych dodatkowych komentarzy."""
 
         messages = [{"role": "user", "content": prompt}]
-        return self.call_claude_api(messages, 800)
+        return self.call_claude_api(messages, 500)
     
     def write_section(self, section_title: str, topic: str, clinic: str, 
                      outline: List[str], written_content: str, 
@@ -233,7 +236,7 @@ Konspekt całego artykułu: {outline}
 Aktualnie piszemy sekcję {current_section_index + 1}: "{section_title}"
 
 Już napisane sekcje:
-{written_content[-1000:] if written_content else "Tylko wstęp"}
+{written_content[-500:] if written_content else "Tylko wstęp"}
 
 Pozostałe do napisania:
 {outline[current_section_index + 1:] if current_section_index + 1 < len(outline) else "To jest ostatnia sekcja"}
@@ -259,21 +262,25 @@ Informacje z researchu:
 
 {clinic_instruction}
 
-Wymagania:
-1. Sekcja powinna mieć 150-250 słów
-2. Merytoryczna, ale przystępna i lifestyleowa
-3. Bez zwracania się do czytelnika (bez "Ci", "Twój", "Ciebie")
-4. Bez metafor i typowych sformułowań AI
-5. Bez słów "kluczowy", "innowacyjny", "nowoczesny"
-6. Jeśli to zasadne, użyj punktowania dla lepszej czytelności
-7. Nie powtarzaj informacji już zawartych w poprzednich sekcjach
-8. Napisz w naturalny, ludzki sposób
-9. Bez dodatkowych komentarzy - tylko treść sekcji
+WAŻNE OGRANICZENIA DŁUGOŚCI:
+- Cały artykuł ma mieć maksymalnie 800 słów
+- Ta sekcja powinna mieć 80-120 słów (około 2-3 akapity)
+- Bądź zwięzły i konkretny
+
+Wymagania stylistyczne:
+1. Merytoryczna, ale przystępna i lifestyleowa
+2. Bez zwracania się do czytelnika (bez "Ci", "Twój", "Ciebie")
+3. Bez metafor i typowych sformułowań AI
+4. Bez słów "kluczowy", "innowacyjny", "nowoczesny"
+5. Jeśli to zasadne, użyj punktowania dla lepszej czytelności
+6. Nie powtarzaj informacji już zawartych w poprzednich sekcjach
+7. Napisz w naturalny, ludzki sposób
+8. Bez dodatkowych komentarzy - tylko treść sekcji
 
 Pamiętaj: to ma być część większego artykułu, więc płynnie nawiązuj do wcześniejszych treści."""
 
         messages = [{"role": "user", "content": prompt}]
-        return self.call_claude_api(messages, 1200)
+        return self.call_claude_api(messages, 800)
 
 # Inicjalizacja aplikacji
 if 'writer' not in st.session_state:
@@ -426,6 +433,26 @@ if st.session_state.writer.article_content:
     st.markdown("---")
     st.header("📄 Gotowy artykuł")
     
+    # Statystyki artykułu
+    article_text = st.session_state.writer.article_content
+    word_count = len(article_text.split())
+    char_count = len(article_text)
+    char_count_no_spaces = len(article_text.replace(' ', ''))
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Słowa", word_count, delta=f"{word_count - 800}" if word_count > 800 else None)
+    with col2:
+        st.metric("Znaki ze spacjami", char_count, delta=f"{char_count - 5000}" if char_count > 5000 else None)
+    with col3:
+        st.metric("Znaki bez spacji", char_count_no_spaces)
+    
+    # Ostrzeżenia o długości
+    if word_count > 800:
+        st.warning(f"⚠️ Artykuł ma {word_count} słów - to za dużo! Docelowo maksymalnie 800 słów.")
+    if char_count > 7000:
+        st.warning(f"⚠️ Artykuł ma {char_count} znaków - to za dużo! Docelowo 5000-7000 znaków.")
+    
     # Edytor markdown
     edited_article = st.text_area(
         "Edytuj artykuł (Markdown):",
@@ -434,9 +461,16 @@ if st.session_state.writer.article_content:
         help="Możesz edytować artykuł w formacie Markdown"
     )
     
-    # Podgląd artykułu
-    st.subheader("Podgląd:")
-    st.markdown(edited_article)
+    # Lepszy podgląd artykułu w dwóch kolumnach
+    col1, col2 = st.columns([1, 1])
+    
+    with col1:
+        st.subheader("📝 Kod Markdown:")
+        st.code(edited_article, language="markdown")
+    
+    with col2:
+        st.subheader("👁️ Podgląd:")
+        st.markdown(edited_article)
     
     # Przycisk do pobrania
     st.download_button(
