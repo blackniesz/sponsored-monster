@@ -35,6 +35,7 @@ class ArticleWriter:
     def __init__(self):
         self.anthropic_api_key = None
         self.outline = []
+        self.title = ""
         self.article_content = ""
         
     def set_api_key(self, anthropic_key: str):
@@ -75,13 +76,13 @@ class ArticleWriter:
         except Exception as e:
             return f"Błąd API: {str(e)}"
     
-    def create_outline(self, topic: str, clinic: str, context: str = "") -> List[str]:
-        """Tworzy konspekt artykułu"""
+    def create_outline(self, topic: str, clinic: str, context: str = "") -> Dict[str, any]:
+        """Tworzy tytuł i konspekt artykułu"""
         clinic_info = CLINICS.get(clinic, {})
         
         context_section = f"\nDodatkowy kontekst: {context}" if context else ""
         
-        prompt = f"""Stwórz zwięzły konspekt artykułu na temat: "{topic}"{context_section}
+        prompt = f"""Stwórz tytuł i zwięzły konspekt artykułu na temat: "{topic}"{context_section}
 
 WAŻNE: Artykuł ma być krótki - maksymalnie 800 słów, więc konspekt musi być zwięzły!
 
@@ -91,77 +92,141 @@ Wymagania:
 3. Konspekt powinien składać się z 4-5 głównych punktów (śródtytułów) - NIE WIĘCEJ!
 4. Każdy punkt powinien być konkretny i interesujący
 5. Nie używaj słów "kluczowy", "innowacyjny", "nowoczesny"
-6. Struktura: Wstęp z hookiem + 4-5 śródtytułów + zakończenie
+6. Tytuł ma być chwytliwy i intrygujący
 
-Zwróć tylko listę śródtytułów w formacie:
+Zwróć w formacie:
+TYTUŁ: [tutaj tytuł artykułu]
+
+ŚRÓDTYTUŁY:
 1. Tytuł pierwszego punktu
 2. Tytuł drugiego punktu
 etc.
 
-Pamiętaj - to ma być artykuł lifestyleowy, nie medyczny podręcznik. Krótki i na temat!"""
+Pamiętaj - to ma być artykuł lifestyleowy, nie medyczny podręcznik!"""
 
         messages = [{"role": "user", "content": prompt}]
         response = self.call_claude_api(messages, 800)
         
-        # Parsowanie odpowiedzi na listę śródtytułów
-        outline_lines = [line.strip() for line in response.split('\n') if line.strip()]
+        # Parsowanie odpowiedzi
+        lines = response.split('\n')
+        title = ""
         outline = []
         
-        for line in outline_lines:
-            # Usuwanie numeracji
-            clean_line = re.sub(r'^\d+\.\s*', '', line)
-            if clean_line and len(clean_line) > 10:  # Filtrowanie zbyt krótkich linii
-                outline.append(clean_line)
+        for line in lines:
+            line = line.strip()
+            if line.startswith("TYTUŁ:"):
+                title = line.replace("TYTUŁ:", "").strip()
+            elif re.match(r'^\d+\.', line):
+                clean_line = re.sub(r'^\d+\.\s*', '', line)
+                if clean_line and len(clean_line) > 10:
+                    outline.append(clean_line)
         
         # Ograniczenie do maksymalnie 5 punktów
         self.outline = outline[:5]
-        return self.outline
+        self.title = title
+        
+        return {"title": title, "outline": outline}
     
-    def generate_article(self, topic: str, clinic: str, outline: List[str], context: str = "") -> str:
-        """Generuje cały artykuł za jednym razem"""
-        clinic_info = CLINICS.get(clinic, {})
+    def write_introduction(self, title: str, topic: str, outline: List[str], context: str = "") -> str:
+        """Pisze wstęp z hookiem"""
+        context_section = f"\nKontekst artykułu: {context}" if context else ""
         
-        context_section = f"\nDodatkowy kontekst dla artykułu: {context}" if context else ""
-        
-        prompt = f"""Napisz artykuł lifestyleowy na temat: "{topic}"{context_section}
+        prompt = f"""Napisz krótki, chwytliwy wstęp do artykułu o tytule: "{title}"
+Temat: {topic}{context_section}
 
 Konspekt artykułu:
 {chr(10).join([f"- {point}" for point in outline])}
 
-Informacje o klinice do subtelnej wzmianki:
-- Nazwa: {clinic_info.get('nazwa', clinic)}
-- Opis: {clinic_info.get('opis', '')}
-- Specjalizacje: {', '.join(clinic_info.get('specjalizacje', []))}
+Wymagania:
+1. MAKSYMALNIE 2-3 zdania (około 50-80 słów)
+2. Zaczynamy od ciekawego hooka - faktu, pytania retorycznego lub zaskakującej informacji
+3. Naturalny, lifestyleowy ton
+4. Bez zwracania się bezpośrednio do czytelnika (bez "Ci", "Twój", "Ciebie")
+5. Bez metafor i sztucznych sformułowań AI
+6. Ma płynnie wprowadzać w temat artykułu
 
-WAŻNE WYMAGANIA:
-1. Artykuł ma mieć MAKSYMALNIE 800 słów (około 5000-6000 znaków)
-2. Zacznij od chwytliwego tytułu artykułu
-3. Potem krótki, chwytliwy wstęp (2-3 zdania) z hookiem
-4. Rozwiń każdy punkt z konspektu w zwięzłej formie (80-120 słów na sekcję)
-5. Wzmiankę o klinice umieść naturalnie w jednej z sekcji (najlepiej w środkowej lub końcowej)
-6. Zakończ krótkim podsumowaniem (2-3 zdania)
-7. Używaj śródtytułów dla każdej sekcji
-8. Naturalny, lifestyleowy ton - bez zwracania się bezpośrednio do czytelnika
-9. Bez słów "kluczowy", "innowacyjny", "nowoczesny"
-10. Bez metafor i sztucznych sformułowań AI
-
-Format odpowiedzi:
-# [Tytuł artykułu]
-
-[Wstęp]
-
-## [Śródtytuł 1]
-[Treść sekcji 1]
-
-## [Śródtytuł 2]
-[Treść sekcji 2]
-
-itd.
-
-Napisz cały artykuł bez żadnych dodatkowych komentarzy."""
+Napisz tylko wstęp, bez żadnych dodatkowych komentarzy."""
 
         messages = [{"role": "user", "content": prompt}]
-        return self.call_claude_api(messages, 2500)
+        return self.call_claude_api(messages, 500)
+    
+    def write_section(self, section_title: str, section_index: int, 
+                     title: str, topic: str, clinic: str, outline: List[str], 
+                     written_content: str, context: str = "") -> str:
+        """Pisze pojedynczą sekcję artykułu"""
+        clinic_info = CLINICS.get(clinic, {})
+        
+        # Co już napisano
+        previous_sections = outline[:section_index]
+        current_section = outline[section_index]
+        remaining_sections = outline[section_index + 1:]
+        
+        # Sprawdzenie, czy to odpowiednie miejsce na wzmiankę o klinice
+        should_mention_clinic = (section_index == len(outline) // 2 or 
+                               section_index == len(outline) - 1)
+        
+        clinic_instruction = ""
+        if should_mention_clinic:
+            clinic_instruction = f"""
+WAŻNE: W tej sekcji umieść subtelną wzmiankę o {clinic_info.get('nazwa', clinic)} - {clinic_info.get('opis', '')}. 
+Wzmianka powinna być naturalna i pasować do kontekstu.
+Specjalizacje kliniki: {', '.join(clinic_info.get('specjalizacje', []))}
+"""
+
+        context_section = f"\nKontekst artykułu: {context}" if context else ""
+
+        prompt = f"""Napisz treść sekcji "{section_title}" dla artykułu o tytule: "{title}"
+Temat główny: {topic}{context_section}
+
+Informacje o strukturze:
+- Już napisane sekcje: {previous_sections if previous_sections else 'tylko wstęp'}
+- Obecna sekcja: {current_section}
+- Pozostałe sekcje: {remaining_sections if remaining_sections else 'to ostatnia sekcja'}
+
+Fragment tego, co już napisano (koniec):
+{written_content[-400:] if len(written_content) > 400 else written_content}
+
+{clinic_instruction}
+
+WAŻNE OGRANICZENIA:
+- Ta sekcja powinna mieć 100-150 słów (2-3 krótkie akapity)
+- NIE powtarzaj informacji z wcześniejszych sekcji
+- Bądź konkretny i podawaj praktyczne informacje
+
+Wymagania stylistyczne:
+1. Merytoryczna, ale przystępna treść
+2. Bez zwracania się do czytelnika (bez "Ci", "Twój")
+3. Naturalny, płynny język
+4. Możesz użyć punktowania jeśli to zasadne
+5. Pamiętaj o kontekście - co już było, co będzie
+
+Napisz tylko treść sekcji, bez tytułu i dodatkowych komentarzy."""
+
+        messages = [{"role": "user", "content": prompt}]
+        return self.call_claude_api(messages, 800)
+    
+    def write_conclusion(self, title: str, topic: str, outline: List[str], 
+                        written_content: str, context: str = "") -> str:
+        """Pisze zakończenie artykułu"""
+        context_section = f"\nKontekst artykułu: {context}" if context else ""
+        
+        prompt = f"""Napisz krótkie zakończenie artykułu o tytule: "{title}"
+Temat: {topic}{context_section}
+
+Sekcje artykułu:
+{chr(10).join([f"- {point}" for point in outline])}
+
+WAŻNE: 
+- Zakończenie ma mieć MAKSYMALNIE 2-3 zdania
+- Podsumuj główną myśl artykułu
+- Zostaw czytelnika z wartościową refleksją
+- NIE powtarzaj tego, co już było
+- Naturalny ton, bez patosu
+
+Napisz tylko zakończenie, bez dodatkowych komentarzy."""
+
+        messages = [{"role": "user", "content": prompt}]
+        return self.call_claude_api(messages, 300)
 
 # Inicjalizacja aplikacji
 if 'writer' not in st.session_state:
@@ -225,28 +290,71 @@ with col2:
     # Przycisk generowania konspektu
     if st.button("📝 Stwórz konspekt", disabled=not topic or not anthropic_key):
         if topic and anthropic_key:
-            with st.spinner("Tworzę konspekt artykułu..."):
-                outline = st.session_state.writer.create_outline(topic, clinic, context)
-                st.success("Konspekt utworzony!")
+            with st.spinner("Tworzę tytuł i konspekt artykułu..."):
+                result = st.session_state.writer.create_outline(topic, clinic, context)
+                st.success("✅ Konspekt gotowy!")
                 
-                # Wyświetlenie konspektu
+                # Wyświetlenie tytułu i konspektu
+                if result["title"]:
+                    st.subheader("📌 Tytuł artykułu:")
+                    st.info(result["title"])
+                
                 st.subheader("📋 Konspekt artykułu:")
-                for i, point in enumerate(outline, 1):
+                for i, point in enumerate(result["outline"], 1):
                     st.write(f"{i}. {point}")
 
 # Sekcja generowania artykułu
-if st.session_state.writer.outline:
+if st.session_state.writer.outline and st.session_state.writer.title:
     st.markdown("---")
     st.header("✍️ Generowanie artykułu")
     
     if st.button("🚀 Wygeneruj pełny artykuł", type="primary"):
         if anthropic_key and topic:
-            with st.spinner("Generuję artykuł..."):
-                article = st.session_state.writer.generate_article(
-                    topic, clinic, st.session_state.writer.outline, context
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            
+            # Rozpoczynamy od tytułu
+            full_article = f"# {st.session_state.writer.title}\n\n"
+            total_steps = len(st.session_state.writer.outline) + 2  # +2 dla wstępu i zakończenia
+            
+            # Generowanie wstępu
+            status_text.text("📝 Piszę wstęp...")
+            intro = st.session_state.writer.write_introduction(
+                st.session_state.writer.title, topic, 
+                st.session_state.writer.outline, context
+            )
+            full_article += intro + "\n\n"
+            progress_bar.progress(1 / total_steps)
+            time.sleep(0.5)
+            
+            # Generowanie sekcji
+            for i, section_title in enumerate(st.session_state.writer.outline):
+                status_text.text(f"✏️ Piszę sekcję {i+1}/{len(st.session_state.writer.outline)}: {section_title[:30]}...")
+                
+                section_content = st.session_state.writer.write_section(
+                    section_title, i, st.session_state.writer.title,
+                    topic, clinic, st.session_state.writer.outline,
+                    full_article, context
                 )
-                st.session_state.generated_article = article
-                st.success("🎉 Artykuł został wygenerowany!")
+                
+                full_article += f"## {section_title}\n\n{section_content}\n\n"
+                progress_bar.progress((i + 2) / total_steps)
+                time.sleep(0.5)
+            
+            # Generowanie zakończenia
+            status_text.text("🎯 Piszę zakończenie...")
+            conclusion = st.session_state.writer.write_conclusion(
+                st.session_state.writer.title, topic,
+                st.session_state.writer.outline, full_article, context
+            )
+            full_article += conclusion
+            
+            st.session_state.generated_article = full_article
+            progress_bar.progress(1.0)
+            status_text.text("✅ Artykuł gotowy!")
+            
+            st.success("🎉 Artykuł został wygenerowany!")
+            st.balloons()
 
 # Wyświetlenie i edycja artykułu
 if st.session_state.generated_article:
