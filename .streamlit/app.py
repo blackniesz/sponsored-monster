@@ -162,6 +162,7 @@ Wymagania:
 4. Każdy punkt powinien być konkretny i interesujący
 5. Nie używaj słów "kluczowy", "innowacyjny", "nowoczesny"
 6. Tytuł ma być chwytliwy i intrygujący
+7. Naturalny zapis jak w zdaniu.
 
 Zwróć w formacie:
 TYTUŁ: [tutaj tytuł artykułu]
@@ -258,15 +259,15 @@ Fragment tego, co już napisano (koniec):
 {clinic_instruction}
 
 WAŻNE OGRANICZENIA:
-- Ta sekcja powinna mieć 100-150 słów (2-3 krótkie akapity)
+- Ta sekcja powinna mieć 150-250 słów (2-3 krótkie akapity)
 - NIE powtarzaj informacji z wcześniejszych sekcji
 - Bądź konkretny i podawaj praktyczne informacje
 
 Wymagania stylistyczne:
-1. Merytoryczna, ale przystępna treść
+1. Merytoryczna, ale przystępna treść, która jest ciekawa dla czytelnika
 2. Bez zwracania się do czytelnika (bez "Ci", "Twój")
 3. Naturalny, płynny język
-4. Możesz użyć punktowania jeśli to zasadne
+4. Możesz użyć wypunktowań, jeżeli to zasadne
 5. Pamiętaj o kontekście - co już było, co będzie
 
 Napisz tylko treść sekcji, bez tytułu i dodatkowych komentarzy."""
@@ -415,7 +416,7 @@ with col2:
         # Zapisanie zmian
         col1, col2 = st.columns([1, 3])
         with col1:
-            if st.button("💾 Zapisz zmiany", type="secondary"):
+            if st.button("💾 Zapisz zmiany konspektu", type="secondary", key="save_outline"):
                 st.session_state.writer.title = edited_title
                 st.session_state.writer.outline = edited_outline
                 st.success("✅ Zmiany zapisane!")
@@ -544,7 +545,7 @@ if st.session_state.generated_article:
             help="Możesz edytować artykuł w formacie Markdown"
         )
         
-        if st.button("💾 Zapisz zmiany"):
+        if st.button("💾 Zapisz zmiany edytora", key="save_article_edits"):
             st.session_state.generated_article = edited_article
             st.success("Zmiany zapisane!")
             st.rerun()
