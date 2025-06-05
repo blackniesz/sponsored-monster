@@ -33,48 +33,117 @@ CLINICS = {
 
 class ArticleWriter:
     def __init__(self):
-        self.anthropic_api_key = None
+        self.api_key = None
+        self.model_provider = "claude"
         self.outline = []
         self.title = ""
         self.article_content = ""
         
-    def set_api_key(self, anthropic_key: str):
-        self.anthropic_api_key = anthropic_key
+    def set_config(self, api_key: str, model_provider: str):
+        self.api_key = api_key
+        self.model_provider = model_provider
     
-    def call_claude_api(self, messages: List[Dict], max_tokens: int = 2000) -> str:
-        """Wywołuje API Claude Sonnet 4"""
-        if not self.anthropic_api_key:
-            return "Błąd: Brak klucza API Anthropic"
+    def call_api(self, messages: List[Dict], max_tokens: int = 2000) -> str:
+        """Wywołuje odpowiednie API w zależności od wybranego modelu"""
+        if not self.api_key:
+            return "Błąd: Brak klucza API"
         
         try:
-            headers = {
-                'Content-Type': 'application/json',
-                'x-api-key': self.anthropic_api_key,
-                'anthropic-version': '2023-06-01'
-            }
-            
-            data = {
-                'model': 'claude-sonnet-4-20250514',
-                'max_tokens': max_tokens,
-                'messages': messages
-            }
-            
-            response = requests.post(
-                'https://api.anthropic.com/v1/messages',
-                headers=headers,
-                json=data
-            )
-            
-            response.raise_for_status()
-            result = response.json()
-            
-            if 'content' in result and len(result['content']) > 0:
-                return result['content'][0]['text']
+            if self.model_provider == "claude":
+                return self._call_claude(messages, max_tokens)
+            elif self.model_provider == "openai":
+                return self._call_openai(messages, max_tokens)
+            elif self.model_provider == "deepseek":
+                return self._call_deepseek(messages, max_tokens)
             else:
-                return "Błąd: Brak odpowiedzi od API"
+                return "Błąd: Nieznany model"
                 
         except Exception as e:
             return f"Błąd API: {str(e)}"
+    
+    def _call_claude(self, messages: List[Dict], max_tokens: int) -> str:
+        """Wywołuje API Claude Sonnet 4"""
+        headers = {
+            'Content-Type': 'application/json',
+            'x-api-key': self.api_key,
+            'anthropic-version': '2023-06-01'
+        }
+        
+        data = {
+            'model': 'claude-sonnet-4-20250514',
+            'max_tokens': max_tokens,
+            'messages': messages
+        }
+        
+        response = requests.post(
+            'https://api.anthropic.com/v1/messages',
+            headers=headers,
+            json=data
+        )
+        
+        response.raise_for_status()
+        result = response.json()
+        
+        if 'content' in result and len(result['content']) > 0:
+            return result['content'][0]['text']
+        else:
+            return "Błąd: Brak odpowiedzi od API"
+    
+    def _call_openai(self, messages: List[Dict], max_tokens: int) -> str:
+        """Wywołuje API OpenAI"""
+        headers = {
+            'Content-Type': 'application/json',
+            'Authorization': f'Bearer {self.api_key}'
+        }
+        
+        data = {
+            'model': 'gpt-4o',
+            'messages': messages,
+            'max_tokens': max_tokens,
+            'temperature': 0.7
+        }
+        
+        response = requests.post(
+            'https://api.openai.com/v1/chat/completions',
+            headers=headers,
+            json=data
+        )
+        
+        response.raise_for_status()
+        result = response.json()
+        
+        if 'choices' in result and len(result['choices']) > 0:
+            return result['choices'][0]['message']['content']
+        else:
+            return "Błąd: Brak odpowiedzi od API"
+    
+    def _call_deepseek(self, messages: List[Dict], max_tokens: int) -> str:
+        """Wywołuje API DeepSeek"""
+        headers = {
+            'Content-Type': 'application/json',
+            'Authorization': f'Bearer {self.api_key}'
+        }
+        
+        data = {
+            'model': 'deepseek-chat',
+            'messages': messages,
+            'max_tokens': max_tokens,
+            'temperature': 0.7
+        }
+        
+        response = requests.post(
+            'https://api.deepseek.com/v1/chat/completions',
+            headers=headers,
+            json=data
+        )
+        
+        response.raise_for_status()
+        result = response.json()
+        
+        if 'choices' in result and len(result['choices']) > 0:
+            return result['choices'][0]['message']['content']
+        else:
+            return "Błąd: Brak odpowiedzi od API"
     
     def create_outline(self, topic: str, clinic: str, context: str = "") -> Dict[str, any]:
         """Tworzy tytuł i konspekt artykułu"""
@@ -105,7 +174,7 @@ etc.
 Pamiętaj - to ma być artykuł lifestyleowy, nie medyczny podręcznik!"""
 
         messages = [{"role": "user", "content": prompt}]
-        response = self.call_claude_api(messages, 800)
+        response = self.call_api(messages, 800)
         
         # Parsowanie odpowiedzi
         lines = response.split('\n')
@@ -148,7 +217,7 @@ Wymagania:
 Napisz tylko wstęp, bez żadnych dodatkowych komentarzy."""
 
         messages = [{"role": "user", "content": prompt}]
-        return self.call_claude_api(messages, 500)
+        return self.call_api(messages, 500)
     
     def write_section(self, section_title: str, section_index: int, 
                      title: str, topic: str, clinic: str, outline: List[str], 
@@ -203,34 +272,70 @@ Wymagania stylistyczne:
 Napisz tylko treść sekcji, bez tytułu i dodatkowych komentarzy."""
 
         messages = [{"role": "user", "content": prompt}]
-        return self.call_claude_api(messages, 800)
+        return self.call_api(messages, 800)
     
 
 
 # Inicjalizacja aplikacji
 if 'writer' not in st.session_state:
     st.session_state.writer = ArticleWriter()
-    # Automatyczne ustawienie klucza API z secrets
-    if hasattr(st, 'secrets') and "ANTHROPIC_API_KEY" in st.secrets:
-        st.session_state.writer.set_api_key(st.secrets["ANTHROPIC_API_KEY"])
 
 if 'generated_article' not in st.session_state:
     st.session_state.generated_article = ""
-
-# Sprawdzenie dostępności klucza API
-anthropic_key = st.secrets.get("ANTHROPIC_API_KEY", "") if hasattr(st, 'secrets') else ""
 
 # Interfejs użytkownika
 st.title("📝 Agent do Pisania Artykułów Sponsorowanych")
 st.markdown("---")
 
-# Informacja o statusie API w sidebarze
+# Konfiguracja w sidebarze
 with st.sidebar:
-    st.header("📊 Status")
-    if anthropic_key:
-        st.success("✅ API Claude aktywne")
+    st.header("⚙️ Konfiguracja")
+    
+    # Wybór modelu
+    model_provider = st.selectbox(
+        "🤖 Wybierz model językowy",
+        options=["claude", "openai", "deepseek"],
+        format_func=lambda x: {
+            "claude": "Claude Sonnet 4",
+            "openai": "GPT-4o", 
+            "deepseek": "DeepSeek Chat"
+        }[x]
+    )
+    
+    # Odpowiedni klucz API w zależności od modelu
+    api_key = ""
+    if model_provider == "claude":
+        api_key = st.secrets.get("ANTHROPIC_API_KEY", "") if hasattr(st, 'secrets') else ""
+        if not api_key:
+            api_key = st.text_input("Klucz API Anthropic", type="password")
+    elif model_provider == "openai":
+        api_key = st.secrets.get("OPENAI_API_KEY", "") if hasattr(st, 'secrets') else ""
+        if not api_key:
+            api_key = st.text_input("Klucz API OpenAI", type="password")
+    elif model_provider == "deepseek":
+        api_key = st.secrets.get("DEEPSEEK_API_KEY", "") if hasattr(st, 'secrets') else ""
+        if not api_key:
+            api_key = st.text_input("Klucz API DeepSeek", type="password")
+    
+    # Status API
+    st.divider()
+    st.subheader("📊 Status")
+    if api_key:
+        st.success(f"✅ {model_provider.upper()} API aktywne")
+        # Automatyczne ustawienie konfiguracji
+        st.session_state.writer.set_config(api_key, model_provider)
     else:
-        st.error("❌ Brak klucza API w secrets")
+        st.error(f"❌ Brak klucza API dla {model_provider}")
+    
+    # Informacje o modelach
+    st.divider()
+    st.subheader("ℹ️ O modelach")
+    model_info = {
+        "claude": "**Claude Sonnet 4** - Najnowszy model Anthropic, świetny w kreatywnym pisaniu",
+        "openai": "**GPT-4o** - Model OpenAI, wszechstronny i szybki",
+        "deepseek": "**DeepSeek Chat** - Chiński model, dobry stosunek jakości do ceny"
+    }
+    st.info(model_info.get(model_provider, ""))
 
 # Główny interfejs
 col1, col2 = st.columns([1, 1])
@@ -267,8 +372,8 @@ with col2:
     st.header("🔍 Generowanie")
     
     # Przycisk generowania konspektu
-    if st.button("📝 Stwórz konspekt", disabled=not topic or not anthropic_key):
-        if topic and anthropic_key:
+    if st.button("📝 Stwórz konspekt", disabled=not topic or not api_key):
+        if topic and api_key:
             with st.spinner("Tworzę tytuł i konspekt artykułu..."):
                 result = st.session_state.writer.create_outline(topic, clinic, context)
                 st.session_state.writer.title = result["title"]
@@ -333,7 +438,7 @@ if st.session_state.writer.outline and st.session_state.writer.title:
             st.write(f"{i}. {section}")
     
     if st.button("🚀 Wygeneruj pełny artykuł", type="primary"):
-        if anthropic_key and topic:
+        if api_key and topic:
             progress_bar = st.progress(0)
             status_text = st.empty()
             
