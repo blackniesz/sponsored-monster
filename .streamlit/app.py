@@ -205,28 +205,7 @@ Napisz tylko treść sekcji, bez tytułu i dodatkowych komentarzy."""
         messages = [{"role": "user", "content": prompt}]
         return self.call_claude_api(messages, 800)
     
-    def write_conclusion(self, title: str, topic: str, outline: List[str], 
-                        written_content: str, context: str = "") -> str:
-        """Pisze zakończenie artykułu"""
-        context_section = f"\nKontekst artykułu: {context}" if context else ""
-        
-        prompt = f"""Napisz krótkie zakończenie artykułu o tytule: "{title}"
-Temat: {topic}{context_section}
 
-Sekcje artykułu:
-{chr(10).join([f"- {point}" for point in outline])}
-
-WAŻNE: 
-- Zakończenie ma mieć MAKSYMALNIE 2-3 zdania
-- Podsumuj główną myśl artykułu
-- Zostaw czytelnika z wartościową refleksją
-- NIE powtarzaj tego, co już było
-- Naturalny ton, bez patosu
-
-Napisz tylko zakończenie, bez dodatkowych komentarzy."""
-
-        messages = [{"role": "user", "content": prompt}]
-        return self.call_claude_api(messages, 300)
 
 # Inicjalizacja aplikacji
 if 'writer' not in st.session_state:
@@ -292,21 +271,66 @@ with col2:
         if topic and anthropic_key:
             with st.spinner("Tworzę tytuł i konspekt artykułu..."):
                 result = st.session_state.writer.create_outline(topic, clinic, context)
+                st.session_state.writer.title = result["title"]
+                st.session_state.writer.outline = result["outline"]
                 st.success("✅ Konspekt gotowy!")
-                
-                # Wyświetlenie tytułu i konspektu
-                if result["title"]:
-                    st.subheader("📌 Tytuł artykułu:")
-                    st.info(result["title"])
-                
-                st.subheader("📋 Konspekt artykułu:")
-                for i, point in enumerate(result["outline"], 1):
-                    st.write(f"{i}. {point}")
+    
+    # Wyświetlenie i edycja konspektu
+    if st.session_state.writer.title or st.session_state.writer.outline:
+        st.subheader("✏️ Edytuj konspekt przed generowaniem:")
+        
+        # Edycja tytułu
+        edited_title = st.text_input(
+            "📌 Tytuł artykułu:",
+            value=st.session_state.writer.title,
+            help="Możesz edytować tytuł"
+        )
+        
+        # Edycja śródtytułów
+        st.write("📋 Śródtytuły (edytuj lub usuń niepotrzebne):")
+        edited_outline = []
+        for i, point in enumerate(st.session_state.writer.outline):
+            edited_point = st.text_input(
+                f"Sekcja {i+1}:",
+                value=point,
+                key=f"section_{i}"
+            )
+            if edited_point:  # Dodajemy tylko niepuste sekcje
+                edited_outline.append(edited_point)
+        
+        # Możliwość dodania nowej sekcji
+        if len(edited_outline) < 5:
+            new_section = st.text_input(
+                "➕ Dodaj nową sekcję (opcjonalne):",
+                key="new_section"
+            )
+            if new_section:
+                edited_outline.append(new_section)
+        
+        # Zapisanie zmian
+        col1, col2 = st.columns([1, 3])
+        with col1:
+            if st.button("💾 Zapisz zmiany", type="secondary"):
+                st.session_state.writer.title = edited_title
+                st.session_state.writer.outline = edited_outline
+                st.success("✅ Zmiany zapisane!")
+                st.rerun()
+        
+        # Wyświetlenie aktualnego konspektu
+        with col2:
+            st.info(f"**Aktualny konspekt:** {len(edited_outline)} sekcji")
 
 # Sekcja generowania artykułu
 if st.session_state.writer.outline and st.session_state.writer.title:
     st.markdown("---")
     st.header("✍️ Generowanie artykułu")
+    
+    # Pokaż finalny konspekt przed generowaniem
+    with st.expander("📋 Sprawdź finalny konspekt", expanded=True):
+        st.write(f"**Tytuł:** {st.session_state.writer.title}")
+        st.write("**Śródtytuły:**")
+        for i, section in enumerate(st.session_state.writer.outline, 1):
+            st.write(f"{i}. {section}")
     
     if st.button("🚀 Wygeneruj pełny artykuł", type="primary"):
         if anthropic_key and topic:
@@ -315,7 +339,7 @@ if st.session_state.writer.outline and st.session_state.writer.title:
             
             # Rozpoczynamy od tytułu
             full_article = f"# {st.session_state.writer.title}\n\n"
-            total_steps = len(st.session_state.writer.outline) + 2  # +2 dla wstępu i zakończenia
+            total_steps = len(st.session_state.writer.outline) + 1  # +1 dla wstępu
             
             # Generowanie wstępu
             status_text.text("📝 Piszę wstęp...")
@@ -340,14 +364,6 @@ if st.session_state.writer.outline and st.session_state.writer.title:
                 full_article += f"## {section_title}\n\n{section_content}\n\n"
                 progress_bar.progress((i + 2) / total_steps)
                 time.sleep(0.5)
-            
-            # Generowanie zakończenia
-            status_text.text("🎯 Piszę zakończenie...")
-            conclusion = st.session_state.writer.write_conclusion(
-                st.session_state.writer.title, topic,
-                st.session_state.writer.outline, full_article, context
-            )
-            full_article += conclusion
             
             st.session_state.generated_article = full_article
             progress_bar.progress(1.0)
